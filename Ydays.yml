@@ -1,0 +1,131 @@
+# namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ydays
+
+---
+#volume
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-volume-claim
+  namespace: ydays
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+
+---
+#deployment mysql
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql-deployment
+  namespace: ydays
+  labels:
+    app: mysql
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mysql-pod
+  template:
+    metadata:
+      labels:
+        app: mysql-pod
+    spec:
+      containers:
+      - image: mysql:latest
+        name: mysql-cont
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          value: root
+        - name: MYSQL_DATABASE
+          value: test 
+        - name: MYSQL_USER
+          value: myuser
+        - name: MYSQL_PASSWORD
+          value: mypassword
+        ports:
+        - containerPort: 3306
+          name: mysql-port
+        volumeMounts:
+        - name: mysql-volume
+          mountPath: /var/lib/mysql
+        resources:
+            requests:
+              memory: 300Mi
+              cpu: 250m
+            limits:
+              memory: 500Mi
+              cpu: 500m
+      volumes:
+      - name: mysql-volume
+        persistentVolumeClaim:
+          claimName: mysql-volume-claim
+      restartPolicy: Always
+---      
+#service mysql
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql-service
+  namespace: ydays
+spec:
+  selector:
+    app: mysql-pod
+  ports:
+    - port: 3306
+      targetPort: 3306
+  type: ClusterIP
+---
+#website
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-deployement
+  namespace: ydays
+  labels:
+    app: web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: web-pod
+  template:
+    metadata:
+      labels:
+        app: web-pod
+    spec:
+      containers:
+      - image: medgear/ydays:1.0.0
+        name: web-cont
+        ports:
+        - containerPort: 80
+        env:
+        - name: web_DB_NAME
+          value: test
+        - name: WORDPRESS_DB_HOST
+          value: mysql-service
+        - name: WORDPRESS_DB_PASSWORD
+          value: mypassword
+        - name: WORDPRESS_DB_USER
+          value: myuser
+---            
+#service web-site
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-service
+  namespace: ydays
+spec:
+  selector:
+    app: web-pod
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+  type: ClusterIP
